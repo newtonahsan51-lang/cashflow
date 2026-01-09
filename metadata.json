@@ -1,0 +1,8 @@
+{
+  "name": "FinSync Cloud",
+  "description": "A high-end personal finance manager featuring secure Google Drive cloud synchronization, AES-256 encryption for backups, and AI-driven financial insights.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
