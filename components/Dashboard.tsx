@@ -2,20 +2,24 @@
 import React from 'react';
 import { SyncData, SyncState } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { POPULAR_CURRENCIES } from '../constants';
 
 interface DashboardProps {
   data: SyncData;
   syncState: SyncState;
+  t: any;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ data, syncState }) => {
+const Dashboard: React.FC<DashboardProps> = ({ data, syncState, t }) => {
+  const currencySymbol = POPULAR_CURRENCIES.find(c => c.code === data.profile.currency)?.symbol || '৳';
+
   const chartData = data.categories.map(cat => ({
     name: cat.name,
     amount: data.transactions
       .filter(t => t.category === cat.name && t.type === 'expense')
       .reduce((sum, t) => sum + t.amount, 0),
     color: cat.color
-  }));
+  })).filter(d => d.amount > 0);
 
   const totalBalance = data.transactions.reduce((sum, t) => 
     t.type === 'income' ? sum + t.amount : sum - t.amount, 0);
@@ -24,89 +28,41 @@ const Dashboard: React.FC<DashboardProps> = ({ data, syncState }) => {
     .filter(t => t.type === 'expense')
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const getSyncBadge = () => {
-    switch (syncState.status) {
-      case 'syncing':
-        return (
-          <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-bold border border-blue-100 animate-pulse">
-            <i className="fa-solid fa-sync fa-spin"></i> Syncing...
-          </div>
-        );
-      case 'error':
-        return (
-          <div className="flex items-center gap-2 px-3 py-1 bg-red-50 text-red-600 rounded-full text-xs font-bold border border-red-100">
-            <i className="fa-solid fa-circle-exclamation"></i> Sync Error
-          </div>
-        );
-      case 'synced':
-        return (
-          <div className="flex items-center gap-2 px-3 py-1 bg-green-50 text-green-600 rounded-full text-xs font-bold border border-green-100">
-            <i className="fa-solid fa-check"></i> Synced
-          </div>
-        );
-      default:
-        return (
-          <div className="flex items-center gap-2 px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-xs font-bold">
-            <i className="fa-solid fa-cloud"></i> Offline
-          </div>
-        );
-    }
-  };
-
   return (
-    <div className="space-y-6 animate-in fade-in duration-700">
-      <div className="flex justify-between items-center mb-2">
-        <h2 className="text-xl font-bold text-slate-800">Financial Overview</h2>
-        <div className="flex items-center gap-3">
-          {getSyncBadge()}
-          <span className="text-[10px] text-slate-400 font-medium">
-            {syncState.lastBackupDate ? `Updated: ${syncState.lastBackupDate.split(',')[1]}` : 'Unsynced'}
-          </span>
+    <div className="space-y-4 animate-in fade-in duration-500 pb-4">
+      {/* Wallet Summary Card */}
+      <div className="gradient-bg p-6 rounded-[2rem] text-white shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
+        <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1">{t.totalBalance}</p>
+        <h2 className="text-3xl font-black">{currencySymbol}{totalBalance.toLocaleString()}</h2>
+        
+        <div className="mt-8 flex justify-between items-center gap-4 border-t border-white/10 pt-4">
+          <div className="flex-1">
+             <p className="text-white/60 text-[10px] uppercase font-black mb-1">মোট ব্যয়</p>
+             <p className="text-sm font-bold">{currencySymbol}{totalExpense.toLocaleString()}</p>
+          </div>
+          <div className="flex-1 text-right">
+             <p className="text-white/60 text-[10px] uppercase font-black mb-1">সিঙ্ক অবস্থা</p>
+             <div className="flex items-center justify-end gap-1.5">
+               <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
+               <span className="text-[10px] font-bold">সুরক্ষিত</span>
+             </div>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-          <p className="text-slate-500 text-sm font-medium mb-1">Total Balance</p>
-          <h2 className="text-3xl font-bold text-slate-900">${totalBalance.toLocaleString()}</h2>
-          <div className="mt-4 flex items-center text-green-600 text-sm font-medium">
-            <i className="fa-solid fa-arrow-up mr-1"></i>
-            +12.5% from last month
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-          <p className="text-slate-500 text-sm font-medium mb-1">Expenses</p>
-          <h2 className="text-3xl font-bold text-slate-900">${totalExpense.toLocaleString()}</h2>
-          <div className="mt-4 flex items-center text-red-600 text-sm font-medium">
-            <i className="fa-solid fa-arrow-down mr-1"></i>
-            -2.4% from last month
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-          <p className="text-slate-500 text-sm font-medium mb-1">Sync Auto-Interval</p>
-          <div className="flex items-center gap-2 mt-2">
-            <i className="fa-solid fa-repeat text-blue-500"></i>
-            <span className="text-slate-700 font-semibold">Every {data.settings.syncInterval}</span>
-          </div>
-          <p className="text-xs text-slate-400 mt-4">Manual backup available in Cloud tab</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm h-[400px]">
-          <h3 className="text-lg font-bold mb-6">Spending by Category</h3>
-          <ResponsiveContainer width="100%" height="85%">
+      {/* Chart Card */}
+      <div className="bg-white dark:bg-slate-800 p-5 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm transition-colors duration-300">
+        <h3 className="text-sm font-black text-slate-800 dark:text-white mb-6 uppercase tracking-tight">ব্যয় বিশ্লেষণ</h3>
+        <div className="h-48">
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-              <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+              <XAxis dataKey="name" hide />
               <Tooltip 
                 cursor={{fill: '#f8fafc'}}
-                contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}}
+                contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '12px'}}
               />
-              <Bar dataKey="amount" radius={[8, 8, 0, 0]}>
+              <Bar dataKey="amount" radius={[8, 8, 8, 8]}>
                 {chartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
@@ -114,30 +70,39 @@ const Dashboard: React.FC<DashboardProps> = ({ data, syncState }) => {
             </BarChart>
           </ResponsiveContainer>
         </div>
+        <div className="flex flex-wrap gap-3 mt-4">
+          {chartData.map(d => (
+            <div key={d.name} className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }}></div>
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">{d.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
 
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col">
-          <h3 className="text-lg font-bold mb-6">Recent Activities</h3>
-          <div className="space-y-4 flex-1">
-            {data.transactions.slice(0, 5).map(t => (
-              <div key={t.id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-all group">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${t.type === 'income' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                    <i className={`fa-solid ${t.type === 'income' ? 'fa-plus' : 'fa-minus'}`}></i>
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800">{t.description}</p>
-                    <p className="text-xs text-slate-400">{t.category}</p>
-                  </div>
+      {/* Activities List */}
+      <div className="bg-white dark:bg-slate-800 p-5 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm transition-colors duration-300">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">{t.recentActivities}</h3>
+          <button className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase">সব দেখুন</button>
+        </div>
+        <div className="space-y-4">
+          {data.transactions.slice(0, 4).map(t_item => (
+            <div key={t_item.id} className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-sm ${t_item.type === 'income' ? 'bg-green-50 dark:bg-green-900/20 text-green-600' : 'bg-red-50 dark:bg-red-900/20 text-red-600'}`}>
+                  <i className={`fa-solid ${t_item.type === 'income' ? 'fa-arrow-up' : 'fa-arrow-down'}`}></i>
                 </div>
-                <div className={`text-sm font-bold ${t.type === 'income' ? 'text-green-600' : 'text-slate-900'}`}>
-                  {t.type === 'income' ? '+' : '-'}${t.amount}
+                <div>
+                  <p className="text-xs font-bold text-slate-800 dark:text-white">{t_item.description}</p>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{t_item.category}</p>
                 </div>
               </div>
-            ))}
-          </div>
-          <button className="mt-4 text-center w-full text-blue-600 font-semibold text-sm hover:underline">
-            View All Transactions
-          </button>
+              <div className={`text-xs font-black ${t_item.type === 'income' ? 'text-green-600' : 'text-slate-900 dark:text-white'}`}>
+                {t_item.type === 'income' ? '+' : '-'}{currencySymbol}{t_item.amount.toLocaleString()}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

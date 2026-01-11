@@ -8,6 +8,15 @@ export interface Transaction {
   type: 'income' | 'expense';
 }
 
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  date: string;
+  type: 'text' | 'list';
+  items?: { id: string; text: string; completed: boolean }[];
+}
+
 export interface Category {
   id: string;
   name: string;
@@ -37,9 +46,11 @@ export interface UserProfile {
 }
 
 export type SyncInterval = '1h' | '6h' | '12h' | '24h';
+export type AppLanguage = 'en' | 'bn' | 'hi' | 'es' | 'ar' | 'fr';
 
 export interface SyncData {
   transactions: Transaction[];
+  notes: Note[];
   categories: Category[];
   budgets: Budget[];
   savingsGoals: SavingsGoal[];
@@ -48,6 +59,8 @@ export interface SyncData {
     notifications: boolean;
     syncInterval: SyncInterval;
     autoSync: boolean;
+    language: AppLanguage;
+    darkMode: boolean;
   };
   profile: UserProfile;
   timestamp: number;
@@ -55,11 +68,21 @@ export interface SyncData {
 
 export type SyncStatus = 'synced' | 'syncing' | 'error' | 'idle';
 
-export interface GoogleUser {
+export interface User {
   id: string;
   name: string;
   email: string;
-  picture: string;
+  picture?: string;
+  role?: 'admin' | 'user';
+}
+
+export interface UserLog {
+  id: string;
+  name: string;
+  email: string;
+  registeredAt: string;
+  lastBackupAt: string | null;
+  status: 'active' | 'inactive';
 }
 
 export interface SyncState {
@@ -69,10 +92,5 @@ export interface SyncState {
   progress: number;
   error: string | null;
   errorType: 'network' | 'permission' | 'quota' | 'unknown' | null;
-  googleUser: GoogleUser | null;
-}
-
-export interface AppState {
-  accounts: Record<string, SyncData>; // email as key
-  activeAccountEmail: string | null;
+  user: User | null;
 }

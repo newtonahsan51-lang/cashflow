@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
-import { driveService, SyncError } from '../services/driveService';
-import { SyncState, SyncData, SyncInterval } from '../types';
+import { cloudService } from '../services/cloudService';
+import { SyncState, SyncData, UserProfile } from '../types';
+import { POPULAR_CURRENCIES } from '../constants';
 
 interface CloudSyncProps {
   currentData: SyncData;
@@ -9,6 +10,8 @@ interface CloudSyncProps {
   onRestore: (data: SyncData) => void;
   onStateUpdate: (state: Partial<SyncState>) => void;
   onSettingsUpdate: (settings: SyncData['settings']) => void;
+  onProfileUpdate: (profile: Partial<UserProfile>) => void;
+  t: any;
 }
 
 const CloudSync: React.FC<CloudSyncProps> = ({ 
@@ -16,22 +19,21 @@ const CloudSync: React.FC<CloudSyncProps> = ({
   syncState, 
   onRestore, 
   onStateUpdate, 
-  onSettingsUpdate 
+  onSettingsUpdate,
+  onProfileUpdate,
+  t 
 }) => {
   const [conflictData, setConflictData] = useState<SyncData | null>(null);
-
-  const handleError = (error: unknown) => {
-    if (error instanceof SyncError) {
-      onStateUpdate({ status: 'error', error: error.message, errorType: error.type, progress: 0 });
-    } else {
-      onStateUpdate({ status: 'error', error: 'Database connection error.', errorType: 'unknown', progress: 0 });
-    }
-  };
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [tempProfile, setTempProfile] = useState({ 
+    name: currentData.profile.name, 
+    currency: currentData.profile.currency 
+  });
 
   const handleBackup = async () => {
     onStateUpdate({ status: 'syncing', progress: 0, error: null });
     try {
-      await driveService.uploadBackup(currentData, (p) => {
+      await cloudService.uploadBackup(currentData, (p) => {
         onStateUpdate({ progress: p });
       });
       const now = new Date().toLocaleString();
@@ -41,15 +43,15 @@ const CloudSync: React.FC<CloudSyncProps> = ({
         progress: 100 
       });
       setTimeout(() => onStateUpdate({ status: 'idle', progress: 0 }), 3000);
-    } catch (error) {
-      handleError(error);
+    } catch (error: any) {
+      onStateUpdate({ status: 'error', error: error.message, progress: 0 });
     }
   };
 
   const startRestore = async () => {
     onStateUpdate({ status: 'syncing', progress: 0, error: null });
     try {
-      const data = await driveService.downloadBackup(currentData.profile.email, (p) => {
+      const data = await cloudService.downloadBackup(currentData.profile.email, (p) => {
         onStateUpdate({ progress: p });
       });
       
@@ -62,11 +64,11 @@ const CloudSync: React.FC<CloudSyncProps> = ({
           setTimeout(() => onStateUpdate({ status: 'idle', progress: 0 }), 2000);
         }
       } else {
-        alert('No cloud database found for this account.');
+        alert('আপনার অ্যাকাউন্টের জন্য কোনো সার্ভার ব্যাকআপ পাওয়া যায়নি।');
         onStateUpdate({ status: 'idle' });
       }
-    } catch (error) {
-      handleError(error);
+    } catch (error: any) {
+      onStateUpdate({ status: 'error', error: error.message, progress: 0 });
     }
   };
 
@@ -88,224 +90,163 @@ const CloudSync: React.FC<CloudSyncProps> = ({
     });
   };
 
-  const intervals: SyncInterval[] = ['1h', '6h', '12h', '24h'];
+  const handleProfileSave = () => {
+    onProfileUpdate(tempProfile);
+    setIsEditingProfile(false);
+  };
+
+  const userInitial = syncState.user?.name.charAt(0).toUpperCase() || '?';
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 relative pb-10">
-      {/* Conflict Resolution Modal */}
+    <div className="max-w-4xl mx-auto space-y-6 relative pb-10 px-1">
       {conflictData && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-xl p-4">
-          <div className="bg-white rounded-[2.5rem] p-8 max-w-2xl w-full shadow-2xl animate-in fade-in zoom-in-95 duration-300">
-            <div className="flex items-center gap-5 mb-8">
-              <div className="w-16 h-16 bg-blue-100 rounded-3xl flex items-center justify-center text-blue-600 shadow-inner">
-                <i className="fa-solid fa-database text-3xl"></i>
-              </div>
-              <div>
-                <h2 className="text-2xl font-extrabold text-slate-900">Database Synchronization</h2>
-                <p className="text-slate-500 font-medium">Found a mismatch between local and cloud data.</p>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
-              <div className="p-6 rounded-3xl border-2 border-slate-100 bg-slate-50">
-                <p className="text-[10px] uppercase tracking-widest text-slate-400 font-black mb-2">Local Instance</p>
-                <p className="text-lg font-bold text-slate-800 mb-1">Latest Local</p>
-                <p className="text-xs text-slate-500">{new Date(currentData.timestamp).toLocaleString()}</p>
-              </div>
-              <div className="p-6 rounded-3xl border-2 border-blue-100 bg-blue-50/30">
-                <p className="text-[10px] uppercase tracking-widest text-blue-400 font-black mb-2">Cloud Database</p>
-                <p className="text-lg font-bold text-slate-800 mb-1">Server Backup</p>
-                <p className="text-xs text-slate-500">{new Date(conflictData.timestamp).toLocaleString()}</p>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-4">
-              <button onClick={() => resolveConflict(false)} className="flex-1 py-5 px-6 rounded-2xl bg-white border-2 border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition-all text-lg">
-                Keep Local
-              </button>
-              <button onClick={() => resolveConflict(true)} className="flex-1 py-5 px-6 rounded-2xl gradient-bg text-white font-bold hover:shadow-2xl transition-all text-lg">
-                Restore From Cloud
-              </button>
+          <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] p-8 max-w-2xl w-full shadow-2xl animate-in zoom-in-95">
+            <h2 className="text-2xl font-black mb-4">ডাটা অমিল পাওয়া গেছে</h2>
+            <p className="text-slate-500 mb-6">সার্ভারের চেয়ে আপনার বর্তমান ডাটা নতুন। আপনি কি সার্ভার থেকে পুরনো ডাটা রিস্টোর করতে চান?</p>
+            <div className="flex gap-4">
+              <button onClick={() => resolveConflict(false)} className="flex-1 py-4 bg-slate-100 dark:bg-slate-700 rounded-2xl font-bold">বর্তমান ডাটা রাখুন</button>
+              <button onClick={() => resolveConflict(true)} className="flex-1 py-4 gradient-bg text-white rounded-2xl font-bold">সার্ভার থেকে নিন</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Cloud Status Panel */}
-      <div className="bg-white rounded-[2.5rem] p-8 md:p-10 border border-slate-200 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 gradient-bg opacity-[0.03] -mr-32 -mt-32 rounded-full"></div>
+      {/* Profile Card */}
+      <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] p-6 border border-slate-200 dark:border-slate-700 shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-48 h-48 gradient-bg opacity-[0.05] -mr-24 -mt-24 rounded-full"></div>
         
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-10">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 gradient-bg rounded-lg flex items-center justify-center text-white text-sm">
-                <i className="fa-solid fa-cloud"></i>
-              </div>
-              <h1 className="text-3xl font-black text-slate-900 tracking-tight">Database Sync</h1>
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 gradient-bg rounded-lg flex items-center justify-center text-white text-sm">
+              <i className="fa-solid fa-user-gear"></i>
             </div>
-            <p className="text-slate-500 font-medium">Secured by AES-256 Encryption & Google Drive</p>
+            <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">প্রোফাইল সেটিংস</h3>
           </div>
-          
-          <div className={`flex items-center gap-3 px-6 py-3 rounded-2xl border-2 transition-all ${
-            currentData.settings.autoSync 
-            ? 'bg-green-50 text-green-700 border-green-100 ring-4 ring-green-500/5' 
-            : 'bg-slate-50 text-slate-400 border-slate-200'
-          }`}>
-            <i className={`fa-solid ${currentData.settings.autoSync ? 'fa-shield-check' : 'fa-shield-slash'} text-lg`}></i>
-            <span className="font-bold uppercase tracking-widest text-xs">{currentData.settings.autoSync ? 'Real-time Sync Active' : 'Manual Mode Only'}</span>
-          </div>
+          <button 
+            onClick={() => setIsEditingProfile(!isEditingProfile)} 
+            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500"
+          >
+            <i className={`fa-solid ${isEditingProfile ? 'fa-xmark' : 'fa-pen-to-square'}`}></i>
+          </button>
         </div>
 
-        {syncState.error && (
-          <div className="mb-8 p-5 bg-red-50 border-2 border-red-100 rounded-3xl flex items-start gap-4 animate-in slide-in-from-top-4">
-            <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center text-red-600 flex-shrink-0">
-              <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+        {isEditingProfile ? (
+          <div className="space-y-4 animate-in slide-in-from-top-2">
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">আপনার নাম</label>
+              <input 
+                type="text" 
+                value={tempProfile.name} 
+                onChange={e => setTempProfile({...tempProfile, name: e.target.value})}
+                className="w-full bg-slate-50 dark:bg-slate-900/50 border-none p-4 rounded-2xl font-bold text-sm outline-none focus:ring-2 ring-blue-100 dark:text-white"
+              />
             </div>
-            <div className="flex-1">
-              <p className="text-red-900 font-black text-sm uppercase tracking-tight">Cloud Sync Interrupted</p>
-              <p className="text-red-600 text-sm mt-1 font-medium">{syncState.error}</p>
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">ডিফল্ট কারেন্সি</label>
+              <select 
+                value={tempProfile.currency} 
+                onChange={e => setTempProfile({...tempProfile, currency: e.target.value})}
+                className="w-full bg-slate-50 dark:bg-slate-900/50 border-none p-4 rounded-2xl font-bold text-sm outline-none focus:ring-2 ring-blue-100 dark:text-white appearance-none"
+              >
+                {POPULAR_CURRENCIES.map(c => (
+                  <option key={c.code} value={c.code}>{c.symbol} - {c.name}</option>
+                ))}
+              </select>
             </div>
-            <button onClick={handleBackup} className="bg-red-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs hover:bg-red-700 transition-all">Retry Sync</button>
+            <button 
+              onClick={handleProfileSave}
+              className="w-full py-4 gradient-bg text-white rounded-2xl font-black text-sm shadow-lg active:scale-95 transition-all mt-2"
+            >
+              পরিবর্তন সেভ করুন
+            </button>
           </div>
-        )}
-
-        {syncState.googleUser && (
-          <div className="bg-slate-50/50 p-6 md:p-8 rounded-[2rem] border border-slate-100">
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
-              <div className="flex items-center gap-5">
-                <div className="relative">
-                  <img src={syncState.googleUser.picture} className="w-16 h-16 rounded-full border-4 border-white shadow-lg" alt="User" />
-                  <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-600 rounded-full border-4 border-white flex items-center justify-center text-[10px] text-white">
-                    <i className="fa-solid fa-check"></i>
-                  </div>
-                </div>
-                <div>
-                  <p className="font-black text-slate-900 text-lg leading-tight">{syncState.googleUser.name}</p>
-                  <p className="text-sm text-slate-500 font-medium">{syncState.googleUser.email}</p>
-                </div>
-              </div>
-              
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full lg:w-auto">
-                <div className="flex items-center justify-between gap-6 px-6 py-4 bg-white rounded-2xl border border-slate-200 flex-1">
-                  <div className="text-left">
-                    <p className="text-[10px] text-slate-400 uppercase font-black mb-0.5 tracking-widest">Background Sync</p>
-                    <p className="text-xs font-bold text-slate-700">{currentData.settings.autoSync ? 'Enabled' : 'Disabled'}</p>
-                  </div>
-                  <button 
-                    onClick={toggleAutoSync}
-                    className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all duration-300 focus:outline-none ${
-                      currentData.settings.autoSync ? 'bg-blue-600' : 'bg-slate-300'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform duration-300 ${
-                        currentData.settings.autoSync ? 'translate-x-7' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                <div className={`flex flex-col gap-1 transition-all ${currentData.settings.autoSync ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
-                  <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest pl-1">Sync Cycle</p>
-                  <div className="flex gap-1.5 p-1 bg-white rounded-xl border border-slate-200">
-                    {intervals.map(interval => (
-                      <button
-                        key={interval}
-                        onClick={() => onSettingsUpdate({ ...currentData.settings, syncInterval: interval })}
-                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${
-                          currentData.settings.syncInterval === interval 
-                            ? 'bg-slate-900 text-white shadow-lg' 
-                            : 'text-slate-500 hover:bg-slate-50'
-                        }`}
-                      >
-                        {interval}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+        ) : (
+          <div className="flex items-center gap-5 p-2">
+             <div className="w-16 h-16 rounded-[1.5rem] gradient-bg flex items-center justify-center text-white text-3xl font-black shadow-lg">
+                {userInitial}
+             </div>
+             <div>
+               <p className="font-black text-slate-900 dark:text-white text-xl">{currentData.profile.name}</p>
+               <p className="text-xs text-slate-400 font-bold">{currentData.profile.email}</p>
+               <div className="flex items-center gap-2 mt-1.5">
+                  <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-md text-[9px] font-black uppercase tracking-widest border border-blue-100 dark:border-blue-900/50">
+                    {currentData.profile.currency}
+                  </span>
+                  <span className="text-[10px] text-slate-300">• Private Account</span>
+               </div>
+             </div>
           </div>
         )}
       </div>
 
-      <div className="grid md:grid-cols-2 gap-8">
-        {/* Backup Module */}
-        <div className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-lg flex flex-col group hover:border-blue-200 transition-all">
-          <div className="flex items-center gap-5 mb-8">
-            <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
-              <i className="fa-solid fa-upload text-2xl"></i>
+      <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] p-6 border border-slate-200 dark:border-slate-700 shadow-xl flex items-center justify-between">
+        <div className="flex items-center gap-4">
+           <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/10 rounded-2xl flex items-center justify-center text-blue-600">
+             <i className="fa-solid fa-cloud-bolt text-xl"></i>
+           </div>
+           <div>
+             <h3 className="font-black text-slate-900 dark:text-white text-sm">অটো ব্যাকআপ</h3>
+             <p className="text-[10px] text-slate-400 font-bold">ডাটা স্বয়ংক্রিয়ভাবে ড্রাইভে সেভ হবে</p>
+           </div>
+        </div>
+        <button 
+          onClick={toggleAutoSync}
+          className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all ${currentData.settings.autoSync ? 'bg-blue-600 shadow-md shadow-blue-500/20' : 'bg-slate-200 dark:bg-slate-700'}`}
+        >
+          <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${currentData.settings.autoSync ? 'translate-x-7' : 'translate-x-1'}`} />
+        </button>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] p-6 border border-slate-200 dark:border-slate-700 shadow-lg flex flex-col group">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/10 rounded-2xl flex items-center justify-center text-blue-600">
+              <i className="fa-solid fa-cloud-arrow-up text-xl"></i>
             </div>
-            <div>
-              <h3 className="font-black text-xl text-slate-900 tracking-tight">Commit to Cloud</h3>
-              <p className="text-sm text-slate-500 font-medium">Save all local changes to database.</p>
-            </div>
+            <h3 className="font-black text-slate-900 dark:text-white text-base">ব্যাকআপ নিন</h3>
           </div>
 
-          <div className="mt-auto space-y-6">
-            <div className="flex justify-between items-end p-4 bg-slate-50 rounded-2xl border border-slate-100">
-              <div>
-                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Last Sync Event</p>
-                <p className="text-sm font-bold text-slate-800 mt-1">{syncState.lastBackupDate || 'Never Backed Up'}</p>
-              </div>
-              <div className="text-right">
-                <i className="fa-solid fa-clock-rotate-left text-slate-300"></i>
-              </div>
+          <div className="mt-auto space-y-4">
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800">
+              <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">সর্বশেষ সিঙ্ক</p>
+              <p className="text-xs font-bold mt-1 text-slate-700 dark:text-slate-300">{syncState.lastBackupDate || 'কখনো নয়'}</p>
             </div>
 
-            {syncState.status === 'syncing' && syncState.progress > 0 && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-[10px] font-black text-blue-600 uppercase">
-                  <span>Transferring Data...</span>
-                  <span>{syncState.progress}%</span>
-                </div>
-                <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                  <div className="bg-blue-600 h-full transition-all duration-300 ease-out" style={{ width: `${syncState.progress}%` }}></div>
-                </div>
+            {syncState.status === 'syncing' && (
+              <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                <div className="bg-blue-600 h-full transition-all duration-300" style={{ width: `${syncState.progress}%` }}></div>
               </div>
             )}
 
             <button
               onClick={handleBackup}
               disabled={syncState.status === 'syncing'}
-              className="w-full py-5 rounded-2xl gradient-bg text-white font-black text-lg hover:shadow-2xl hover:-translate-y-1 transition-all active:scale-95 disabled:opacity-50 disabled:translate-y-0"
+              className="w-full py-4 rounded-2xl gradient-bg text-white font-black text-base shadow-lg active:scale-95 disabled:opacity-50 transition-all"
             >
-              {syncState.status === 'syncing' ? (
-                <span className="flex items-center justify-center gap-3">
-                  <i className="fa-solid fa-circle-notch fa-spin"></i>
-                  Syncing Database
-                </span>
-              ) : 'Sync Now'}
+              {syncState.status === 'syncing' ? <i className="fa-solid fa-circle-notch fa-spin"></i> : "সিঙ্ক শুরু করুন"}
             </button>
           </div>
         </div>
 
-        {/* Restore Module */}
-        <div className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-lg flex flex-col group hover:border-purple-200 transition-all">
-          <div className="flex items-center gap-5 mb-8">
-            <div className="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 group-hover:scale-110 transition-transform">
-              <i className="fa-solid fa-download text-2xl"></i>
+        <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] p-6 border border-slate-200 dark:border-slate-700 shadow-lg flex flex-col group">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-12 h-12 bg-purple-50 dark:bg-purple-900/10 rounded-2xl flex items-center justify-center text-purple-600">
+              <i className="fa-solid fa-cloud-arrow-down text-xl"></i>
             </div>
-            <div>
-              <h3 className="font-black text-xl text-slate-900 tracking-tight">Cloud Retrieval</h3>
-              <p className="text-sm text-slate-500 font-medium">Pull database from cloud storage.</p>
-            </div>
+            <h3 className="font-black text-slate-900 dark:text-white text-base">রিস্টোর ডাটা</h3>
           </div>
 
-          <div className="mt-auto space-y-6">
-            <div className="p-5 bg-amber-50 rounded-2xl border border-amber-100 flex gap-4">
-              <i className="fa-solid fa-circle-info text-amber-500 mt-1"></i>
-              <p className="text-xs text-amber-700 font-medium leading-relaxed">
-                Restoring will replace all current data on this device for <b>{currentData.profile.email}</b>.
-              </p>
-            </div>
-
+          <div className="mt-auto space-y-4">
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/30 p-4 rounded-2xl leading-relaxed border border-slate-100 dark:border-slate-800">
+              সার্ভার থেকে ডাটা আনলে আপনার মোবাইলের বর্তমান ডাটা আপডেট হয়ে যাবে।
+            </p>
             <button
               onClick={startRestore}
               disabled={syncState.status === 'syncing'}
-              className="w-full py-5 rounded-2xl border-2 border-slate-200 text-slate-800 font-black text-lg hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-50"
+              className="w-full py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 dark:text-white font-black text-base active:scale-95 disabled:opacity-50 transition-all hover:bg-slate-50 dark:hover:bg-slate-700"
             >
-              Fetch Database
+              ডাটা রিস্টোর করুন
             </button>
           </div>
         </div>
