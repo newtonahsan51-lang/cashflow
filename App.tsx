@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
 import Dashboard from './components/Dashboard';
@@ -13,6 +13,7 @@ import CameraModal from './components/CameraModal';
 import { SyncData, SyncState, User } from './types';
 import { authService } from './services/authService';
 import { driveService } from './services/driveService';
+import { cloudService } from './services/cloudService';
 import { 
   INITIAL_CATEGORIES, 
   INITIAL_TRANSACTIONS, 
@@ -29,9 +30,10 @@ const App: React.FC = () => {
   const [appData, setAppData] = useState<SyncData | null>(null);
   const [isAddingTransaction, setIsAddingTransaction] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isSyncingBackground, setIsSyncingBackground] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncState>({
     isConnected: false,
-    lastBackupDate: null,
+    lastBackupDate: localStorage.getItem('FINSYNC_LAST_SYNC'),
     status: 'idle',
     progress: 0,
     error: null,
@@ -39,9 +41,36 @@ const App: React.FC = () => {
     user: null
   });
 
+  // Debounced background sync
+  useEffect(() => {
+    if (appData && currentUser && appData.settings.autoSync && syncStatus.isConnected) {
+      const timer = setTimeout(async () => {
+        setIsSyncingBackground(true);
+        try {
+          await cloudService.uploadBackup(appData, () => {});
+          const now = new Date().toLocaleString();
+          localStorage.setItem('FINSYNC_LAST_SYNC', now);
+          setSyncStatus(prev => ({ ...prev, lastBackupDate: now, status: 'synced' }));
+          setTimeout(() => setSyncStatus(prev => ({ ...prev, status: 'idle' })), 2000);
+        } catch (e) {
+          console.error("Background sync failed", e);
+        } finally {
+          setIsSyncingBackground(false);
+        }
+      }, 5000); // Wait 5 seconds after last change to sync
+      return () => clearTimeout(timer);
+    }
+  }, [appData, currentUser, syncStatus.isConnected]);
+
   useEffect(() => {
     driveService.connect().then(connected => {
       setSyncStatus(prev => ({ ...prev, isConnected: connected }));
+      // If we are already logged in, try to auto-sync from cloud once connected
+      const savedUser = localStorage.getItem('FINSYNC_CURRENT_USER');
+      if (savedUser && connected) {
+        const user = JSON.parse(savedUser);
+        restoreFromCloud(user.email);
+      }
     });
 
     const savedUser = localStorage.getItem('FINSYNC_CURRENT_USER');
@@ -86,11 +115,40 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLoginSuccess = (user: User) => {
+  const restoreFromCloud = async (email: string) => {
+    setIsSyncingBackground(true);
+    try {
+      const cloudData = await cloudService.downloadBackup(email, () => {});
+      if (cloudData) {
+        // Compare timestamps - only restore if cloud data is newer or local is missing
+        const localDataRaw = localStorage.getItem(`FINSYNC_DATA_${email}`);
+        const localData = localDataRaw ? JSON.parse(localDataRaw) : null;
+        
+        if (!localData || cloudData.timestamp > localData.timestamp) {
+          setAppData(cloudData);
+          localStorage.setItem(`FINSYNC_DATA_${email}`, JSON.stringify(cloudData));
+          const now = new Date().toLocaleString();
+          localStorage.setItem('FINSYNC_LAST_SYNC', now);
+          setSyncStatus(prev => ({ ...prev, lastBackupDate: now }));
+        }
+      }
+    } catch (e) {
+      console.warn("Initial cloud restore failed", e);
+    } finally {
+      setIsSyncingBackground(false);
+    }
+  };
+
+  const handleLoginSuccess = async (user: User) => {
     setCurrentUser(user);
     setSyncStatus(prev => ({ ...prev, user }));
     localStorage.setItem('FINSYNC_CURRENT_USER', JSON.stringify(user));
     loadUserData(user.email);
+    
+    // Immediately attempt cloud restore after login
+    if (syncStatus.isConnected) {
+      await restoreFromCloud(user.email);
+    }
   };
 
   const handleLogout = async () => {
@@ -187,9 +245,17 @@ const App: React.FC = () => {
                <i className="fa-solid fa-right-from-bracket text-xs"></i>
              </button>
              <div>
-              <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-                {t[activeTab as keyof typeof t] || activeTab}
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                  {t[activeTab as keyof typeof t] || activeTab}
+                </h1>
+                {isSyncingBackground && (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full border border-blue-100 dark:border-blue-800 animate-pulse">
+                    <i className="fa-solid fa-cloud-arrow-up text-[8px]"></i>
+                    <span className="text-[8px] font-black uppercase tracking-tighter">Syncing</span>
+                  </div>
+                )}
+              </div>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                 {currentUser.name}
               </p>

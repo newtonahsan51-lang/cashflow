@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { cloudService } from '../services/cloudService';
 import { SyncState, SyncData, UserProfile } from '../types';
@@ -37,6 +36,7 @@ const CloudSync: React.FC<CloudSyncProps> = ({
         onStateUpdate({ progress: p });
       });
       const now = new Date().toLocaleString();
+      localStorage.setItem('FINSYNC_LAST_SYNC', now);
       onStateUpdate({ 
         status: 'synced', 
         lastBackupDate: now,
@@ -56,11 +56,14 @@ const CloudSync: React.FC<CloudSyncProps> = ({
       });
       
       if (data) {
+        // If local data is newer, ask for confirmation
         if (currentData.timestamp > data.timestamp) {
           setConflictData(data);
         } else {
           onRestore(data);
-          onStateUpdate({ status: 'synced', progress: 100 });
+          const now = new Date().toLocaleString();
+          localStorage.setItem('FINSYNC_LAST_SYNC', now);
+          onStateUpdate({ status: 'synced', progress: 100, lastBackupDate: now });
           setTimeout(() => onStateUpdate({ status: 'idle', progress: 0 }), 2000);
         }
       } else {
@@ -75,7 +78,9 @@ const CloudSync: React.FC<CloudSyncProps> = ({
   const resolveConflict = (proceed: boolean) => {
     if (proceed && conflictData) {
       onRestore(conflictData);
-      onStateUpdate({ status: 'synced', progress: 100 });
+      const now = new Date().toLocaleString();
+      localStorage.setItem('FINSYNC_LAST_SYNC', now);
+      onStateUpdate({ status: 'synced', progress: 100, lastBackupDate: now });
       setTimeout(() => onStateUpdate({ status: 'idle', progress: 0 }), 2000);
     } else {
       onStateUpdate({ status: 'idle', progress: 0 });
@@ -102,10 +107,10 @@ const CloudSync: React.FC<CloudSyncProps> = ({
       {conflictData && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-xl p-4">
           <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] p-8 max-w-2xl w-full shadow-2xl animate-in zoom-in-95">
-            <h2 className="text-2xl font-black mb-4">ডাটা অমিল পাওয়া গেছে</h2>
-            <p className="text-slate-500 mb-6">সার্ভারের চেয়ে আপনার বর্তমান ডাটা নতুন। আপনি কি সার্ভার থেকে পুরনো ডাটা রিস্টোর করতে চান?</p>
+            <h2 className="text-2xl font-black mb-4 dark:text-white">ডাটা অমিল পাওয়া গেছে</h2>
+            <p className="text-slate-500 dark:text-slate-400 mb-6">সার্ভারের চেয়ে আপনার বর্তমান ডাটা নতুন। আপনি কি সার্ভার থেকে পুরনো ডাটা রিস্টোর করতে চান?</p>
             <div className="flex gap-4">
-              <button onClick={() => resolveConflict(false)} className="flex-1 py-4 bg-slate-100 dark:bg-slate-700 rounded-2xl font-bold">বর্তমান ডাটা রাখুন</button>
+              <button onClick={() => resolveConflict(false)} className="flex-1 py-4 bg-slate-100 dark:bg-slate-700 dark:text-white rounded-2xl font-bold">বর্তমান ডাটা রাখুন</button>
               <button onClick={() => resolveConflict(true)} className="flex-1 py-4 gradient-bg text-white rounded-2xl font-bold">সার্ভার থেকে নিন</button>
             </div>
           </div>
@@ -221,10 +226,10 @@ const CloudSync: React.FC<CloudSyncProps> = ({
 
             <button
               onClick={handleBackup}
-              disabled={syncState.status === 'syncing'}
+              disabled={syncState.status === 'syncing' || !syncState.isConnected}
               className="w-full py-4 rounded-2xl gradient-bg text-white font-black text-base shadow-lg active:scale-95 disabled:opacity-50 transition-all"
             >
-              {syncState.status === 'syncing' ? <i className="fa-solid fa-circle-notch fa-spin"></i> : "সিঙ্ক শুরু করুন"}
+              {!syncState.isConnected ? "অফলাইন" : syncState.status === 'syncing' ? <i className="fa-solid fa-circle-notch fa-spin"></i> : "সিঙ্ক শুরু করুন"}
             </button>
           </div>
         </div>
@@ -239,11 +244,11 @@ const CloudSync: React.FC<CloudSyncProps> = ({
 
           <div className="mt-auto space-y-4">
             <p className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/30 p-4 rounded-2xl leading-relaxed border border-slate-100 dark:border-slate-800">
-              সার্ভার থেকে ডাটা আনলে আপনার মোবাইলের বর্তমান ডাটা আপডেট হয়ে যাবে।
+              সার্ভার থেকে ডাটা আনলে আপনার মোবাইলের বর্তমান ডাটা আপডেট হয়ে যাবে। অন্য ডিভাইসের ডাটা পেতে এটি ব্যবহার করুন।
             </p>
             <button
               onClick={startRestore}
-              disabled={syncState.status === 'syncing'}
+              disabled={syncState.status === 'syncing' || !syncState.isConnected}
               className="w-full py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 dark:text-white font-black text-base active:scale-95 disabled:opacity-50 transition-all hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               ডাটা রিস্টোর করুন
