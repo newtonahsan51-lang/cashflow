@@ -10,9 +10,8 @@ import Categories from './components/Categories';
 import Reports from './components/Reports';
 import Notes from './components/Notes';
 import Login from './components/Login';
-import AdminPanel from './components/AdminPanel';
 import CameraModal from './components/CameraModal';
-import { SyncData, SyncState, User, UserLog } from './types';
+import { SyncData, SyncState, User } from './types';
 import { authService } from './services/authService';
 import { driveService } from './services/driveService';
 import { 
@@ -84,14 +83,6 @@ const App: React.FC = () => {
     }
   };
 
-  const updateGlobalSyncLog = (email: string) => {
-    const registry: UserLog[] = JSON.parse(localStorage.getItem('FINSYNC_USER_REGISTRY') || '[]');
-    const updated = registry.map(u => 
-      u.email === email ? { ...u, lastBackupAt: new Date().toISOString() } : u
-    );
-    localStorage.setItem('FINSYNC_USER_REGISTRY', JSON.stringify(updated));
-  };
-
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
     setSyncStatus(prev => ({ ...prev, user }));
@@ -155,7 +146,6 @@ const App: React.FC = () => {
       case 'categories': return <Categories data={appData} onUpdate={updateAppData} t={t} />;
       case 'reports': return <Reports data={appData} t={t} />;
       case 'notes': return <Notes data={appData} onUpdate={updateAppData} t={t} />;
-      case 'admin': return <AdminPanel />;
       case 'settings': return (
         <CloudSync 
           currentData={appData} 
@@ -163,7 +153,6 @@ const App: React.FC = () => {
           onRestore={setAppData as any}
           onStateUpdate={(st) => {
             setSyncStatus(prev => ({ ...prev, ...st }));
-            if (st.status === 'synced' && currentUser) updateGlobalSyncLog(currentUser.email);
           }}
           onSettingsUpdate={(settings) => updateAppData({ settings: { ...appData.settings, ...settings } })}
           onProfileUpdate={handleProfileUpdate}
@@ -196,10 +185,10 @@ const App: React.FC = () => {
              </button>
              <div>
               <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-                {activeTab === 'admin' ? 'অ্যাডমিন প্যানেল' : (t[activeTab as keyof typeof t] || activeTab)}
+                {t[activeTab as keyof typeof t] || activeTab}
               </h1>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                {currentUser.role === 'admin' ? 'Administrator' : currentUser.name}
+                {currentUser.name}
               </p>
             </div>
           </div>
@@ -231,7 +220,7 @@ const App: React.FC = () => {
         <i className="fa-solid fa-plus text-xl"></i>
       </button>
 
-      <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} userRole={currentUser.role} t={t} />
+      <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} t={t} />
 
       <CameraModal isOpen={isCameraOpen} onClose={() => setIsCameraOpen(false)} onCapture={handleCaptureProfile} />
     </div>

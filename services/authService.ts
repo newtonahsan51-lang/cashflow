@@ -1,7 +1,6 @@
 
 import { User, UserLog } from '../types';
 
-// সিপ্যানেলে হোস্ট করার সময় আপনার ডোমেইন অনুযায়ী পাথ ঠিক করে নিন
 const API_BASE = '/api'; 
 
 export const authService = {
@@ -12,53 +11,34 @@ export const authService = {
       body: JSON.stringify({ email, password })
     });
     
-    if (!response.ok) {
-      const result = await response.json();
-      throw new Error(result.error || "লগইন ব্যর্থ হয়েছে");
-    }
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "ইমেইল বা পাসওয়ার্ড ভুল।");
     
-    return await response.json();
+    return result;
   },
 
-  sendVerificationCode: async (email: string, name: string, password: string): Promise<void> => {
+  register: async (name: string, email: string, password: string): Promise<User> => {
     const response = await fetch(`${API_BASE}/register.php`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, name, password })
+      body: JSON.stringify({ name, email, password })
     });
     
-    if (!response.ok) {
-      const result = await response.json();
-      throw new Error(result.error || "ওটিপি পাঠানো যায়নি");
-    }
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "নিবন্ধন ব্যর্থ হয়েছে।");
+    
+    return result;
   },
 
-  register: async (name: string, email: string, password: string, otp: string): Promise<User> => {
-    const response = await fetch(`${API_BASE}/verify_otp.php`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password, otp })
-    });
-    
-    if (!response.ok) {
-      const result = await response.json();
-      throw new Error(result.error || "নিবন্ধন সম্পন্ন করা যায়নি");
-    }
-    
-    return await response.json();
+  // Added getRegistry method to fetch the list of users for the admin panel
+  getRegistry: async (): Promise<UserLog[]> => {
+    const response = await fetch(`${API_BASE}/registry.php`);
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "ব্যবহারকারী তালিকা আনা সম্ভব হয়নি।");
+    return result;
   },
 
   logout: async () => {
     localStorage.removeItem('FINSYNC_CURRENT_USER');
-  },
-
-  getRegistry: async (): Promise<UserLog[]> => {
-    try {
-      const response = await fetch(`${API_BASE}/admin_registry.php`);
-      if (!response.ok) return [];
-      return await response.json();
-    } catch (e) {
-      return [];
-    }
   }
 };

@@ -35,11 +35,6 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'settings', icon: 'fa-cog', label: t.cloudSync },
   ];
 
-  // Add Admin tab only for admins
-  if (user.role === 'admin') {
-    menuItems.push({ id: 'admin', icon: 'fa-user-shield', label: 'এডমিন প্যানেল' });
-  }
-
   return (
     <div className="w-64 bg-slate-900 h-screen text-slate-400 p-6 fixed left-0 top-0 flex flex-col hidden md:flex z-50 border-r border-slate-800">
       <div className="flex items-center gap-3 mb-10 mt-2">
@@ -108,9 +103,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
             <div className="text-xs overflow-hidden flex-1">
               <p className="text-slate-100 font-bold truncate">{user.name}</p>
-              <p className="text-blue-500 font-black uppercase tracking-tighter text-[8px]">
-                {user.role === 'admin' ? 'ADMIN ACCESS' : 'PRIVATE ACCOUNT'}
-              </p>
+              <p className="text-blue-500 font-black uppercase tracking-tighter text-[8px]">PRIVATE ACCOUNT</p>
             </div>
             <button 
               onClick={onLogout}

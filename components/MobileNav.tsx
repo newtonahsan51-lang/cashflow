@@ -4,23 +4,17 @@ import React from 'react';
 interface MobileNavProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  userRole?: 'admin' | 'user';
   t: any;
 }
 
-const MobileNav: React.FC<MobileNavProps> = ({ activeTab, setActiveTab, userRole, t }) => {
+const MobileNav: React.FC<MobileNavProps> = ({ activeTab, setActiveTab, t }) => {
   const menuItems = [
     { id: 'dashboard', icon: 'fa-house', label: t.dashboard, color: '#4F46E5' },
     { id: 'transactions', icon: 'fa-receipt', label: t.transactions, color: '#10B981' },
     { id: 'notes', icon: 'fa-note-sticky', label: t.notes, color: '#F59E0B' },
+    { id: 'reports', icon: 'fa-chart-simple', label: t.reports, color: '#8B5CF6' },
     { id: 'settings', icon: 'fa-cloud', label: t.cloudSync || 'সিঙ্ক', color: '#06B6D4' },
   ];
-
-  if (userRole === 'admin') {
-    menuItems.push({ id: 'admin', icon: 'fa-user-shield', label: 'এডমিন', color: '#EF4444' });
-  } else {
-    menuItems.push({ id: 'reports', icon: 'fa-chart-simple', label: t.reports, color: '#8B5CF6' });
-  }
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-t border-slate-100 dark:border-slate-800 px-2 pt-3 pb-8 flex justify-around items-center z-50 safe-area-bottom shadow-[0_-4px_20px_rgba(0,0,0,0.03)] transition-colors duration-300">
