@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
@@ -47,10 +46,14 @@ const App: React.FC = () => {
 
     const savedUser = localStorage.getItem('FINSYNC_CURRENT_USER');
     if (savedUser) {
-      const user: User = JSON.parse(savedUser);
-      setCurrentUser(user);
-      setSyncStatus(prev => ({ ...prev, user }));
-      loadUserData(user.email);
+      try {
+        const user: User = JSON.parse(savedUser);
+        setCurrentUser(user);
+        setSyncStatus(prev => ({ ...prev, user }));
+        loadUserData(user.email);
+      } catch (e) {
+        localStorage.removeItem('FINSYNC_CURRENT_USER');
+      }
     }
   }, []);
 

@@ -1,4 +1,3 @@
-
 import { User, UserLog } from '../types';
 
 const API_BASE = '/api'; 
@@ -12,7 +11,7 @@ export const authService = {
     });
     
     const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "ইমেইল বা পাসওয়ার্ড ভুল।");
+    if (!response.ok) throw new Error(result.error || "লগইন ব্যর্থ হয়েছে।");
     
     return result;
   },
@@ -30,11 +29,12 @@ export const authService = {
     return result;
   },
 
-  // Added getRegistry method to fetch the list of users for the admin panel
+  // Fix: Added getRegistry method to fetch UserLog records from the API for AdminPanel usage
   getRegistry: async (): Promise<UserLog[]> => {
-    const response = await fetch(`${API_BASE}/registry.php`);
+    const response = await fetch(`${API_BASE}/users.php`);
     const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "ব্যবহারকারী তালিকা আনা সম্ভব হয়নি।");
+    if (!response.ok) throw new Error(result.error || "ইউজার তালিকা আনতে ব্যর্থ হয়েছে।");
+    
     return result;
   },
 
